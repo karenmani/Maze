@@ -1,0 +1,193 @@
+import lejos.robotics.navigation.*;
+import lejos.hardware.motor.EV3LargeRegulatedMotor; 
+import lejos.hardware.port.MotorPort; 
+import lejos.robotics.chassis.Chassis; 
+import lejos.robotics.chassis.Wheel; 
+import lejos.robotics.chassis.WheeledChassis;
+import lejos.hardware.Button;
+import lejos.hardware.sensor.EV3ColorSensor;
+import lejos.hardware.sensor.EV3IRSensor;
+import lejos.hardware.sensor.SensorMode;
+import lejos.hardware.port.SensorPort;
+
+public class MasterMazeProgram{
+	
+	
+	//Declare the color sensor, IR sensor, and Primary Value
+	static EV3ColorSensor colorSensor = new EV3ColorSensor(SensorPort.S3);
+	static EV3IRSensor irSensor = new EV3IRSensor(SensorPort.S1);
+	
+	
+	//Declare important variables
+	 final static int PRIMARY_VALUE = colorSensor.getColorID();
+	static SensorMode forward_distance, right_distance, left_distance;
+	static float[] forward_value, right_value, left_value;
+	static int RIGHT_ANGLE = 71;
+	
+	//create motors, wheels, and the object that controls them
+	static EV3LargeRegulatedMotor  LEFT_MOTOR  =  new  EV3LargeRegulatedMotor(MotorPort.C); 
+	static EV3LargeRegulatedMotor  RIGHT_MOTOR  =  new  EV3LargeRegulatedMotor(MotorPort.A);
+    static Wheel wheel1 = WheeledChassis.modelWheel(LEFT_MOTOR , 2.0).offset(-7.5);
+    static Wheel wheel2 = WheeledChassis.modelWheel(RIGHT_MOTOR , 2.0).offset(7.5);
+    static Chassis chassis = new WheeledChassis(new  Wheel[] { wheel1, wheel2 }, WheeledChassis.TYPE_DIFFERENTIAL);
+    static MovePilot pilot = new MovePilot(chassis);
+
+
+	   
+	   public static void main(String[] args) {
+	      Button.waitForAnyPress();
+	     do {
+		 moveRobot(); //moves robot until gets to an intersection
+	     blueResponse(); //navigates robot through intersection
+	      } while(true); // keeps running until boolean from endpointReached returns true
+	   }
+	   //method to have robot move forward
+		private static void moveRobot() {
+			System.out.println("Moving robot");
+			pilot.setAngularSpeed(10); 
+			pilot.setLinearSpeed(5);
+			//If the color sensor detects something other than blue, follows line, recenters to find line
+			while(colorSensor.getColorID() != 2) {
+				recenter(); 		//redirects to line follow program
+				pilot.travel(1.00); 	
+				if(colorSensor.getColorID() == 2) {
+					pilot.travel(1.6);		//moves to middle of blue intersection so that we turn 90
+					pilot.stop();
+					break; 		//goes to the navigate robot method
+				}
+			}
+		}
+		// this is a line follow program
+		public static void recenter() {
+			System.out.println("Recentering Robot");
+			pilot.setAngularSpeed(10);
+			
+			double currentAngle = 5;
+			
+			while(true) {
+				if(colorSensor.getColorID() != 7) {	 // if the light is not on black
+					pilot.rotate(currentAngle);
+					currentAngle *= -1.5; 	//angle gradually increases until it finds the line
+					if(colorSensor.getColorID() >= 7) {  //light is on black
+						break; //goes back to the moveRobot method
+					}
+				} else {
+					break; // fail safe
+				}
+			}
+
+		}
+	   // method to turn at intersection
+	   public static void blueResponse() 
+	   {
+		   System.out.println("Blue Response Method");
+		   pilot.setAngularSpeed(10);
+		  
+		  int wallOnRight = turnRight();
+		  if (wallOnRight == 1)
+		  {
+			  pilot.forward();
+			  //push 1
+			  moveRobot();
+		  }
+		  else if(wallOnRight==0)
+		  {
+			  pilot.rotate(-80);
+		  }
+		  int wallInFront = turnStraight();
+		  if (wallInFront == 1)
+		  {
+			  pilot.forward();
+			  //push 2
+			  moveRobot();
+		  }
+		  else
+		  {
+			  turnLeft();
+			  //push 3
+			  moveRobot();
+			  
+		  }
+		  
+	   }
+	   
+	   public static int turnRight()
+	   {
+		   pilot.rotate(80);
+			  pilot.stop();
+			  int wall = 0;
+			  //Figure out if an object is to the right of robot
+			  right_distance = irSensor.getDistanceMode();
+			  float [] right_value = new float[right_distance.sampleSize()];
+			  right_distance.fetchSample(right_value, 0);
+			  System.out.println("right value is"+ right_value[0]);
+			  if(right_value[0] > 20) {
+				  wall = 1;
+				  return wall;
+			  }
+			  return wall;
+	   }
+	   public static int turnStraight()
+	   {
+		   //pilot.rotate(-80);
+			  pilot.stop();
+			  int wall = 0;
+			  //Figure out if an object is in front of robot
+			  forward_distance = irSensor.getDistanceMode();
+			  float [] forward_value = new float[forward_distance.sampleSize()];
+			  forward_distance.fetchSample(forward_value, 0);
+			  System.out.println("forward value is"+ forward_value[0]);
+			  if(forward_value[0] > 20) {
+				  wall = 1;
+				  return wall;
+			  }
+			  return wall;
+	   }
+	   public static int turnLeft()
+	   {
+		     pilot.rotate(-80);
+			  pilot.stop();
+			  int wall = 0;
+			  //Figure out if an object is to the left of robot
+			  forward_distance = irSensor.getDistanceMode();
+			  float [] left_value = new float[forward_distance.sampleSize()];
+			  forward_distance.fetchSample(left_value, 0);
+			  System.out.println("forward value is"+ left_value[0]);
+			  if(left_value[0] > 20) {
+				  wall = 1;
+				  return wall;
+			  }
+			  return wall;
+	   }
+	   
+	   public static void navigateRobot2(int[] optionNums) {
+		   
+		   if(optionNums[1] == 1)  { //first, if it can turn right it does turn right
+			   System.out.println("turning right");
+			   pilot.travel(2.00);
+		   } else if(optionNums[0] == 1) {
+			   System.out.println("going straight");
+			   pilot.rotate(-71); //if it can't turn right then it turns back and goes straight
+			   pilot.travel(2.00);
+			   //moveRobot();
+		   } else {
+			   pilot.rotate(-71 * 2); //otherwise, turns left
+			   pilot.travel(2.00);
+			   //moveRobot(); 
+		   }
+		   
+	   }
+		  //tests to see if robot has reached the end cell
+		  public static Boolean endpointReached() {
+			  if((forward_value[0] < 5) && (right_value[0] < 5) && (left_value[0] < 5) ) {
+				  System.out.println("You've reached the endpoint");
+				  pilot.stop();
+				  return true;
+			  } else {
+				  return false;
+			  }//returns boolean to main
+		  }
+		  
+}		
+
+
